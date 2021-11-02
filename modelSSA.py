@@ -1,6 +1,7 @@
 import numpy as np
 import random
 from numba import jit
+import time
 
 
 def timeit(func):
@@ -14,37 +15,48 @@ def timeit(func):
     return wrapper
 
 
-class modelSSA:
+def rates(X, M, K):
+    R = np.zeros(M.shape[0])
+    for i, r in enumerate(M):
+        R[i] = K[i]*np.prod(X[np.where(r < 0)])
+    R[R < 0] = 0
+    return R
 
-    def __init__(self, ini, stoch, const):
-        self.ini = np.array(ini)
-        self.stoch = np.array(stoch)
-        self.const = np.array(const)
-        self.times = np.array([0.0])
 
-        self.states = np.array([self.ini], ndmin=2)
+def Gillespie_ts(t, X, M, R, Rtot):
 
-    @timeit
-    def Gillespie(self, dur):
+        tau = np.random.exponential(1/Rtot)
+        t += tau
 
-        while self.times[-1] < dur:
+        reac = M[np.random.choice(range(M.shape[0]),
+                                  p=R/Rtot)]
+        X += reac
 
-            state = self.states[-1]
+        return t, X
 
-            a = np.zeros(self.stoch.shape[0])
-            for i, r in enumerate(self.stoch):
-                a[i] = self.const[i]*np.prod(state[np.where(r < 0)])
-            a[a < 0] = 0
-            atot = np.sum(a)
 
-            if atot == 0:
-                break
+@timeit
+def Gillespie(tmax, t, Xini, M, K):
 
-            tau = np.random.exponential(1/atot)
-            self.times = np.append(self.times, self.times[-1]+tau)
+    X = np.array(Xini, ndmin=2)
+    t = np.array(t)
+    K = np.array(K)
+    M = np.array(M)
 
-            reac = random.choices(self.stoch, weights=a)
-            self.states = np.concatenate((self.states, state+reac))
+    while t[-1] < tmax:
+
+        R = rates(X[-1], M, K)
+        Rtot = np.sum(R)
+        if Rtot == 0:
+            break
+
+        t_new, X_new = Gillespie_ts(t[-1], X[-1], M, R, Rtot)
+
+        #X = np.concatenate((X, X_new))
+        X = np.vstack((X, X_new))
+        t = np.append(t, t_new)
+
+    return t, X
 
 
 if __name__ == "__main__":
@@ -52,8 +64,7 @@ if __name__ == "__main__":
     stoch = [[-1, 1, 0],
              [0, -1, 1]]
     const = [2, 0.5]
-    model = modelSSA(init, stoch, const)
-    print(model.states[-1])
-    model.run(100)
-    print(model.states[-1])
-    print(model.times[-1])
+    t = [0.0]
+    t, X = Gillespie(10, t, init, stoch, const)
+    print(X[-1])
+    print(len(t))
