@@ -4,10 +4,11 @@
 #include <ctime>
 #include <cmath>
 #include <chrono>
+#include <random>
 
 template <size_t nReacs, size_t nSpecies>
-int* Gillespie(int* X, double* K, int (&M)[nReacs][nSpecies], double tstart,
-        double tmax) {
+int* Gillespie(int (&X)[nSpecies], double (&K)[nReacs], int
+        (&M)[nReacs][nSpecies], double tstart, double tmax) {
 
     double t = tstart;
     double R[nReacs]; // Array of reaction rates
@@ -18,9 +19,10 @@ int* Gillespie(int* X, double* K, int (&M)[nReacs][nSpecies], double tstart,
     double tau; // increment of time
     bool exit; // flag to exit the loop
 
-
-    //setting random seed
-    std::srand(static_cast<unsigned int>(std::time(nullptr)));
+    //setting up random generator
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    std::uniform_real_distribution<> dis(0.0, 1.0);
 
     while (t < tmax) {
 
@@ -39,8 +41,8 @@ int* Gillespie(int* X, double* K, int (&M)[nReacs][nSpecies], double tstart,
         if (exit) break;
 
         // Draw two random numbers
-        r1 = (double) std::rand()/RAND_MAX;
-        r2 = (double) std::rand()/RAND_MAX;
+        r1 = dis(gen);
+        r2 = dis(gen);
         
         // Select reaction to fire
         choice = 0;
