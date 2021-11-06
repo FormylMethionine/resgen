@@ -8,7 +8,7 @@
 
 __global__
 void Gillespie(int* X, int nSpecies, float* K, int nReacs, int* M, float
-        tstart, float tmax, int N) {
+        tstart, float tmax, int N, curandState* states) {
 
     float t = tstart;
     float* R = (float*)malloc(nReacs*sizeof(float));
@@ -20,8 +20,7 @@ void Gillespie(int* X, int nSpecies, float* K, int nReacs, int* M, float
     bool exit; // flag to exit the loop
 
     //setting up random generator
-    curandState state;
-    curand_init(clock64(), threadIdx.x, 0, &state);
+    curand_init(clock64(), threadIdx.x, 0, &states[threadIdx.x]);
 
     while (t < tmax) {
 
@@ -40,8 +39,8 @@ void Gillespie(int* X, int nSpecies, float* K, int nReacs, int* M, float
         if (exit) break;
 
         // Draw two random numbers
-        r1 = curand_uniform(&state);
-        r2 = curand_uniform(&state);
+        r1 = curand_uniform(&states[threadIdx.x]);
+        r2 = curand_uniform(&states[threadIdx.x]);
         
         // Select reaction to fire
         choice = 0;
@@ -65,7 +64,7 @@ void Gillespie(int* X, int nSpecies, float* K, int nReacs, int* M, float
 
 int main() {
 
-    int N = 1024;
+    int N = 256;
 
     int* X;
     float* K;
@@ -90,8 +89,11 @@ int main() {
     M[4] = -1;
     M[5] = 1;
 
+    curandState* states;
+    cudaMalloc(&states, N*sizeof(curandState));
+
     auto start = std::chrono::high_resolution_clock::now();
-    Gillespie <<<1, N>>> (X, 3, K, 2, M, 0.0, 10.0, N);
+    Gillespie <<<1, N>>> (X, 3, K, 2, M, 0.0, 10.0, N, states);
     cudaDeviceSynchronize();
     auto end = std::chrono::high_resolution_clock::now();
 
