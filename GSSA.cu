@@ -5,10 +5,11 @@
 #include <math.h>
 #include <chrono>
 #include <stdio.h>
+#include <curand_mtgp32_host.h>
 
 __global__
 void Gillespie(int* X, int nSpecies, float* K, int nReacs, int* M, float
-        tstart, float tmax, int N, curandState* states) {
+        tstart, float tmax, int N, curandStateMtgp32* states) {
 
     float t = tstart;
     float* R = (float*)malloc(nReacs*sizeof(float));
@@ -20,7 +21,7 @@ void Gillespie(int* X, int nSpecies, float* K, int nReacs, int* M, float
     bool exit; // flag to exit the loop
 
     //setting up random generator
-    curand_init(clock64(), threadIdx.x, 0, &states[threadIdx.x]);
+    //curand_init(clock64(), threadIdx.x, 0, &states[threadIdx.x]);
 
     while (t < tmax) {
 
@@ -64,7 +65,7 @@ void Gillespie(int* X, int nSpecies, float* K, int nReacs, int* M, float
 
 int main() {
 
-    int N = 256;
+    int N = 200;
 
     int* X;
     float* K;
@@ -89,8 +90,14 @@ int main() {
     M[4] = -1;
     M[5] = 1;
 
-    curandState* states;
-    cudaMalloc(&states, N*sizeof(curandState));
+    curandStateMtgp32* states;
+    cudaMalloc(&states, N*sizeof(curandStateMtgp32));
+
+    mtgp32_kernel_params* kernelParams;
+    cudaMalloc(&kernelParams, sizeof(kernelParams));
+    curandMakeMTGP32Constants(mtgp32dc_params_fast_11213, kernelParams);
+    curandMakeMTGP32KernelState(states, mtgp32dc_params_fast_11213,
+            kernelParams, N, time(NULL));
 
     auto start = std::chrono::high_resolution_clock::now();
     Gillespie <<<1, N>>> (X, 3, K, 2, M, 0.0, 10.0, N, states);
