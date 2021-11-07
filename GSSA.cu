@@ -7,6 +7,9 @@
 #include <stdio.h>
 #include <curand_mtgp32_host.h>
 
+#define NB 200
+#define TPB 256
+
 __global__
 void Gillespie(int* X, int nSpecies, float* K, int nReacs, int* M, float
         tstart, float tmax, int N, curandStateMtgp32* states) {
@@ -19,6 +22,8 @@ void Gillespie(int* X, int nSpecies, float* K, int nReacs, int* M, float
     float r1, r2; // random numbers
     float tau; // increment of time
     bool exit; // flag to exit the loop
+    
+    int id = blockIdx.x*blockDim.x + threadIdx.x;
 
     //setting up random generator
     //curand_init(clock64(), threadIdx.x, 0, &states[threadIdx.x]);
@@ -31,7 +36,7 @@ void Gillespie(int* X, int nSpecies, float* K, int nReacs, int* M, float
         for (int i=0; i<nReacs; i++) {
             R[i] = K[i];
             for (int j=0; j<nSpecies; j++) 
-                if (M[i*nSpecies + j] < 0) R[i] *= pow(X[threadIdx.x + i*N], -M[i*nSpecies + j]);
+                if (M[i*nSpecies + j] < 0) R[i] *= pow(X[id + i*N], -M[i*nSpecies + j]);
             Rsum += R[i];
         }
 
@@ -40,8 +45,8 @@ void Gillespie(int* X, int nSpecies, float* K, int nReacs, int* M, float
         if (exit) break;
 
         // Draw two random numbers
-        r1 = curand_uniform(&states[threadIdx.x]);
-        r2 = curand_uniform(&states[threadIdx.x]);
+        r1 = curand_uniform(&states[blockIdx.x]);
+        r2 = curand_uniform(&states[blockIdx.x]);
         
         // Select reaction to fire
         choice = 0;
@@ -54,10 +59,10 @@ void Gillespie(int* X, int nSpecies, float* K, int nReacs, int* M, float
         // Pass time
         tau = -log(r1)/Rsum;
         t += tau;
-
+        
         // update X
         for (int i=0; i<nSpecies; i++) 
-            X[threadIdx.x + i*N] += M[choice*nSpecies + i];
+            X[id + i*N] += M[choice*nSpecies + i];
 
     }
 
@@ -65,7 +70,7 @@ void Gillespie(int* X, int nSpecies, float* K, int nReacs, int* M, float
 
 int main() {
 
-    int N = 200;
+    int N = NB*TPB;
 
     int* X;
     float* K;
@@ -97,10 +102,10 @@ int main() {
     cudaMalloc(&kernelParams, sizeof(kernelParams));
     curandMakeMTGP32Constants(mtgp32dc_params_fast_11213, kernelParams);
     curandMakeMTGP32KernelState(states, mtgp32dc_params_fast_11213,
-            kernelParams, N, time(NULL));
+            kernelParams, NB, time(NULL));
 
     auto start = std::chrono::high_resolution_clock::now();
-    Gillespie <<<1, N>>> (X, 3, K, 2, M, 0.0, 10.0, N, states);
+    Gillespie <<<NB, TPB>>> (X, 3, K, 2, M, 0.0, 10.0, N, states);
     cudaDeviceSynchronize();
     auto end = std::chrono::high_resolution_clock::now();
 
