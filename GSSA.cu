@@ -3,7 +3,6 @@
 #include <curand.h>
 #include <curand_kernel.h>
 #include <math.h>
-#include <chrono>
 #include <stdio.h>
 #include <curand_mtgp32_host.h>
 
@@ -11,22 +10,19 @@
 #define TPB 256
 
 __global__
-void Gillespie(int* X, int nSpecies, float* K, int nReacs, int* M, float
-        tstart, float tmax, int N, curandStateMtgp32* states) {
+void Gillespie(int* X, int nSpecies, double* K, int nReacs, int* M, double
+        tstart, double tmax, int N, curandStateMtgp32* states) {
 
-    float t = tstart;
-    float* R = (float*)malloc(nReacs*sizeof(float));
-    float Rsum; // sum of reaction rates
-    float partialRsum; // partial sum of reaction rates
+    double t = tstart;
+    double* R = (double*)malloc(nReacs*sizeof(double));
+    double Rsum; // sum of reaction rates
+    double partialRsum; // partial sum of reaction rates
     int choice; // index of chosen reaction
-    float r1, r2; // random numbers
-    float tau; // increment of time
+    double r1, r2; // random numbers
+    double tau; // increment of time
     bool exit; // flag to exit the loop
     
     int id = blockIdx.x*blockDim.x + threadIdx.x;
-
-    //setting up random generator
-    //curand_init(clock64(), threadIdx.x, 0, &states[threadIdx.x]);
 
     while (t < tmax) {
 
@@ -35,10 +31,18 @@ void Gillespie(int* X, int nSpecies, float* K, int nReacs, int* M, float
         //Calculte reaction rates
         for (int i=0; i<nReacs; i++) {
             R[i] = K[i];
-            for (int j=0; j<nSpecies; j++) 
-                if (M[i*nSpecies + j] < 0) R[i] *= pow(X[id + i*N], -M[i*nSpecies + j]);
+            for (int j=0; j<nSpecies; j++) {
+                //printf("%d ", M[i*nSpecies+j]);
+                if (M[i*nSpecies + j] < 0) {
+                    //printf("(%d) ", X[id + j*N]);
+                    R[i] *= pow((double)X[j*N + id], 
+                                (double)(-M[i*nSpecies + j]));
+                }
+            }
+            //printf("\n");
             Rsum += R[i];
         }
+        //printf("\n");
 
         exit = true;
         for (int i=0; i<nReacs; i++) if (R[i] != 0) exit=false; 
@@ -62,7 +66,7 @@ void Gillespie(int* X, int nSpecies, float* K, int nReacs, int* M, float
         
         // update X
         for (int i=0; i<nSpecies; i++) 
-            X[id + i*N] += M[choice*nSpecies + i];
+        X[i*N + id] += M[choice*nSpecies + i];
 
     }
 
@@ -73,27 +77,37 @@ int main() {
     int N = NB*TPB;
 
     int* X;
-    float* K;
+    double* K;
     int* M;
 
     cudaMallocManaged(&X, 3*N*sizeof(int));
-    cudaMallocManaged(&K, 2*sizeof(float));
-    cudaMallocManaged(&M, 3*2*sizeof(float));
+    cudaMallocManaged(&K, 4*sizeof(double));
+    cudaMallocManaged(&M, 3*4*sizeof(int));
 
-    for (int i=0; i<N; i++) X[i] = 300;
-    for (int i=N; i<2*N; i++) X[i] = 10;
+    for (int i=0; i<N; i++) X[i] = 10000;
+    for (int i=N; i<2*N; i++) X[i] = 0;
     for (int i=2*N; i<3*N; i++) X[i] = 0;
 
-    K[0] = 2;
-    K[1] = .5;
+    K[0] = 1;
+    K[1] = .002;
+    K[2] = .5;
+    K[3] = .04;
 
     M[0] = -1;
-    M[1] = 1;
+    M[1] = 0;
     M[2] = 0;
 
-    M[3] = 0;
-    M[4] = -1;
-    M[5] = 1;
+    M[3] = -2;
+    M[4] = 1;
+    M[5] = 0;
+
+    M[6] = 2;
+    M[7] = -1;
+    M[8] = 0;
+
+    M[9] = 0;
+    M[10] = -1;
+    M[11] = 1;
 
     curandStateMtgp32* states;
     cudaMalloc(&states, N*sizeof(curandStateMtgp32));
@@ -104,19 +118,14 @@ int main() {
     curandMakeMTGP32KernelState(states, mtgp32dc_params_fast_11213,
             kernelParams, NB, time(NULL));
 
-    auto start = std::chrono::high_resolution_clock::now();
-    Gillespie <<<NB, TPB>>> (X, 3, K, 2, M, 0.0, 10.0, N, states);
+    Gillespie <<<NB, TPB>>> (X, 3, K, 4, M, 0.0, 6.0, N, states);
     cudaDeviceSynchronize();
-    auto end = std::chrono::high_resolution_clock::now();
 
-    auto time = end - start;
 
     float X_mean[3] = {0, 0, 0};
     for (int i=0; i<3; i++) for (int j=i*N; j<(i+1)*N; j++) X_mean[i] += X[j];
     for (int i=0; i<3; i++) X_mean[i] /= N;
     for (int i=0; i<3; i++) std::cout << X_mean[i] << " ";
     std::cout << std::endl;
-    std::cout << "Time taken: " << time/std::chrono::milliseconds(1) << "ms"
-        << std::endl;
        
 }
