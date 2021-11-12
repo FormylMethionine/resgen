@@ -30,16 +30,23 @@ void Gillespie(int* X, int nSpecies, double* K, int nReacs, int* M, double
 
         //Calculte reaction rates
         for (int i=0; i<nReacs; i++) {
+
             R[i] = K[i];
+
             for (int j=0; j<nSpecies; j++) {
-                //printf("%d ", M[i*nSpecies+j]);
+
                 if (M[i*nSpecies + j] < 0) {
-                    //printf("(%d) ", X[id + j*N]);
-                    R[i] *= pow((double)X[j*N + id], 
-                                (double)(-M[i*nSpecies + j]));
+
+                    if (X[j*N + id] >= -M[i*nSpecies + j]) {
+                        // Reaction rate can only be non zero if there is
+                        // enough reactants to permit reactions
+                        // this a safeguard to prevent X from going negative
+                        R[i] *= pow((double)X[j*N + id], 
+                                    (double)(-M[i*nSpecies + j]));
+                    } else R[i] *= 0;
                 }
             }
-            //printf("\n");
+
             Rsum += R[i];
         }
         //printf("\n");
