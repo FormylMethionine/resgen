@@ -121,11 +121,15 @@ int main() {
     Gillespie <<<NB, TPB>>> (X, 3, K, 4, M, 0.0, 6.0, N, states);
     cudaDeviceSynchronize();
 
-
     float X_mean[3] = {0, 0, 0};
     for (int i=0; i<3; i++) for (int j=i*N; j<(i+1)*N; j++) X_mean[i] += X[j];
     for (int i=0; i<3; i++) X_mean[i] /= N;
     for (int i=0; i<3; i++) std::cout << X_mean[i] << " ";
     std::cout << std::endl;
+
+    cudaFree(&X);
+    cudaFree(&K);
+    cudaFree(&M);
+    cudaFree(&states);
        
 }
