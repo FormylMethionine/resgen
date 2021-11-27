@@ -1,4 +1,7 @@
 #include <iostream>
+#include <fstream>
+#include <string>
+#include <vector>
 #include <iomanip>
 #include <cstdlib>
 #include <ctime>
@@ -6,9 +9,12 @@
 #include <chrono>
 #include <random>
 
-template <size_t nReacs, size_t nSpecies>
-int* Gillespie(int (&X)[nSpecies], double (&K)[nReacs], int
-        (&M)[nReacs][nSpecies], double tstart, double tmax) {
+int* Gillespie(int* X, 
+        int nSpecies,
+        double* K,
+        int nReacs,
+        int* M,
+        double tstart, double tmax) {
 
     double t = tstart;
     double R[nReacs]; // Array of reaction rates
@@ -26,13 +32,17 @@ int* Gillespie(int (&X)[nSpecies], double (&K)[nReacs], int
 
     while (t < tmax) {
 
+        //for (int i=0; i<nSpecies; i++) std::cout << X[i] << " ";
+        //std::cout << std::endl;
+
         Rsum = 0;
 
         //Calculte reaction rates
         for (int i=0; i<nReacs; i++) {
             R[i] = K[i];
             for (int j=0; j<nSpecies; j++) 
-                if (M[i][j] < 0) R[i] *= pow(X[j], -M[i][j]);
+                if (M[i*nSpecies + j] < 0) 
+                    R[i] *= pow(X[j], -M[i*nSpecies + j]);
             Rsum += R[i];
         }
 
@@ -54,10 +64,11 @@ int* Gillespie(int (&X)[nSpecies], double (&K)[nReacs], int
         
         // Pass time
         tau = -log(r1)/Rsum;
+        std::cout << t << " " << tau << std::endl;
         t += tau;
 
         // update X
-        for (int i=0; i<nSpecies; i++) X[i] += M[choice][i];
+        for (int i=0; i<nSpecies; i++) X[i] += M[choice*nSpecies + i];
 
     }
 
@@ -65,19 +76,81 @@ int* Gillespie(int (&X)[nSpecies], double (&K)[nReacs], int
 
 }
 
-int main() {
+int main(int argc, char** argv) {
 
-    int X[3] = {300, 10, 0};
-    int M[2][3] = {{-1, 1, 0}, {0, -1, 1}};
-    double K[2] = {2, .5};
+    if (argc == 1) {
+        std::cout << "Argument!" << std::endl;
+        return 1;
+    }
+
+    // Reading network file
+    
+    std::cout << argv[1] << std::endl;
+
+    std::ifstream network(argv[1]);
+
+    int nSpecies;
+    int nReacs;
+    int* X;
+    double* K;
+    int* M;
+
+    if (network.is_open()) {
+
+        std::string line;
+        std::string delimiter = " ";
+        int line_nb = 0;
+        std::vector<std::string> words{};
+        size_t pos = 0;
+
+        while (std::getline(network, line)) {
+
+            // splitting line into numbers
+            while ((pos = line.find(delimiter)) != std::string::npos) {
+                words.push_back(line.substr(0, pos));
+                line.erase(0, pos + delimiter.length());
+            }
+
+            switch(line_nb) {
+
+                case 0 : 
+                {
+                    nSpecies = std::stoi(words[0]);
+                    X = new int[nSpecies];
+                    for (int i=0; i<nSpecies; i++)
+                        X[i] = std::stoi(words[i+1]);
+                    break;
+                }
+
+                case 1:
+                {
+                    nReacs = std::stoi(words[0]);
+                    K = new double[nReacs];
+                    for (int i=0; i<nReacs; i++)
+                        K[i] = std::stoi(words[i+1]);
+                    break;
+                }
+
+                case 2:
+                {
+                    M = new int[nSpecies*nReacs];
+                    for (int i=0; i<(nReacs*nSpecies); i++)
+                        M[i] = std::stoi(words[i]);
+                }                  
+
+            }
+
+            line_nb++;
+            words.clear();
+
+        }
+    } else {
+        std::cout << "File not opening you dumbfuck!" << std::endl;
+        return 1;
+    }
 
     auto start = std::chrono::high_resolution_clock::now();
-    for (int i=0; i<30000; i++) {
-        X[0] = 300;
-        X[1] = 10;
-        X[2] = 0;
-        Gillespie(X, K, M, 0.0, 10);
-    }
+    Gillespie(X, nSpecies, K, nReacs, M, 0.0, 0.2);
     auto end = std::chrono::high_resolution_clock::now();
 
     auto time = end - start;
@@ -86,6 +159,10 @@ int main() {
     std::cout << std::endl;
     std::cout << "Time taken: " << time/std::chrono::milliseconds(1) << "ms"
         << std::endl;
+
+    delete X;
+    delete K;
+    delete M;
 
     return 0;
 }
