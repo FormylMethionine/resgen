@@ -174,11 +174,50 @@ int main(int argc, char** argv) {
     std::cout << "Time taken: " << time/std::chrono::milliseconds(1) << "ms"
         << std::endl;
 
+    int Xavg[nSpecies];
+
+    for (int i=0; i<nSpecies; i++) {
+        for (int j=0; j<N; j++) {
+            Xavg[i] += (Xs[j])[i];
+        }
+        Xavg[i] /= N;
+    }
+    for (int i=0; i<N; i++) delete Xs[i];
+
+    std::ofstream results;
+    results.open("results.txt");
+
+    if (results.is_open()) {
+        for (int i=0; i<nSpecies; i++) {
+            results << Xavg[i] << ",";
+        }
+    } else {
+        std::cout << "Unable to open result file" << std::endl;
+        return 1;
+    }
+
+    results.close();
+
+    results.open("time.txt");
+
+    if (results.is_open()) {
+        results << nSpecies 
+            << "," 
+            << nReacs 
+            << "," 
+            << N 
+            << "," 
+            << time/std::chrono::milliseconds(1);
+    } else {
+        std::cout << "Unable to open result file" << std::endl;
+        return 1;
+    }
+
+    results.close();
+
     delete Xini;
     delete K;
     delete M;
-
-    for (int i=0; i<N; i++) delete Xs[i];
 
     return 0;
 }
