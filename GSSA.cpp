@@ -17,6 +17,7 @@ int* Gillespie(int* X,
         double tstart, double tmax) {
 
     double t = tstart;
+    double t_new;
     double R[nReacs]; // Array of reaction rates
     double Rsum; // sum of reaction rates
     double partialRsum; // partial sum of reaction rates
@@ -32,7 +33,7 @@ int* Gillespie(int* X,
 
     while (t < tmax) {
 
-        //for (int i=0; i<nSpecies; i++) std::cout << X[i] << " ";
+        //for (int i=0; i<nReacs; i++) std::cout << K[i] << " ";
         //std::cout << std::endl;
 
         Rsum = 0;
@@ -64,8 +65,10 @@ int* Gillespie(int* X,
         
         // Pass time
         tau = -log(r1)/Rsum;
-        std::cout << t << " " << tau << std::endl;
-        t += tau;
+        //std::cout << t << " " << tau << std::endl;
+        t_new = t + tau;
+        if (t_new == t) break;
+        t = t_new;
 
         // update X
         for (int i=0; i<nSpecies; i++) X[i] += M[choice*nSpecies + i];
@@ -78,7 +81,7 @@ int* Gillespie(int* X,
 
 int main(int argc, char** argv) {
 
-    if (argc == 1) {
+    if (argc != 3) {
         std::cout << "Argument!" << std::endl;
         return 1;
     }
@@ -89,9 +92,11 @@ int main(int argc, char** argv) {
 
     std::ifstream network(argv[1]);
 
+    int N = std::stoi(argv[2]);
+
     int nSpecies;
     int nReacs;
-    int* X;
+    int* Xini;
     double* K;
     int* M;
 
@@ -116,9 +121,9 @@ int main(int argc, char** argv) {
                 case 0 : 
                 {
                     nSpecies = std::stoi(words[0]);
-                    X = new int[nSpecies];
+                    Xini = new int[nSpecies];
                     for (int i=0; i<nSpecies; i++)
-                        X[i] = std::stoi(words[i+1]);
+                        Xini[i] = std::stoi(words[i+1]);
                     break;
                 }
 
@@ -127,7 +132,7 @@ int main(int argc, char** argv) {
                     nReacs = std::stoi(words[0]);
                     K = new double[nReacs];
                     for (int i=0; i<nReacs; i++)
-                        K[i] = std::stoi(words[i+1]);
+                        K[i] = std::stod(words[i+1]);
                     break;
                 }
 
@@ -136,6 +141,7 @@ int main(int argc, char** argv) {
                     M = new int[nSpecies*nReacs];
                     for (int i=0; i<(nReacs*nSpecies); i++)
                         M[i] = std::stoi(words[i]);
+                    break;
                 }                  
 
             }
@@ -149,20 +155,30 @@ int main(int argc, char** argv) {
         return 1;
     }
 
+    int* Xs[N];
+
+    for (int i=0; i<N; i++) {
+        Xs[i] = new int[nSpecies];
+        for (int j=0; j<nSpecies; j++) (Xs[i])[j] = Xini[j];
+    }
+
     auto start = std::chrono::high_resolution_clock::now();
-    Gillespie(X, nSpecies, K, nReacs, M, 0.0, 0.2);
+    for (int i=0; i<N; i++)
+        Gillespie(Xs[i], nSpecies, K, nReacs, M, 0.0, 1.0);
     auto end = std::chrono::high_resolution_clock::now();
 
     auto time = end - start;
 
-    for (int i=0; i<3; i++) std::cout << X[i] << " ";
+    //for (int i=0; i<3; i++) std::cout << X[i] << " ";
     std::cout << std::endl;
     std::cout << "Time taken: " << time/std::chrono::milliseconds(1) << "ms"
         << std::endl;
 
-    delete X;
+    delete Xini;
     delete K;
     delete M;
+
+    for (int i=0; i<N; i++) delete Xs[i];
 
     return 0;
 }
