@@ -33,7 +33,7 @@ int* Gillespie(int* X,
 
     while (t < tmax) {
 
-        //for (int i=0; i<nReacs; i++) std::cout << K[i] << " ";
+        //for (int i=0; i<nReacs; i++) std::cout << X[i] << " ";
         //std::cout << std::endl;
 
         Rsum = 0;
@@ -112,11 +112,14 @@ int main(int argc, char** argv) {
         size_t pos = 0;
 
         while (std::getline(network, line)) {
-
+            
             // splitting line into numbers
             while ((pos = line.find(delimiter)) != std::string::npos) {
                 words.push_back(line.substr(0, pos));
                 line.erase(0, pos + delimiter.length());
+            } 
+            if (pos == std::string::npos) {
+                words.push_back(line.substr(0, std::string::npos));
             }
 
             switch(line_nb) {
@@ -177,9 +180,10 @@ int main(int argc, char** argv) {
     std::cout << "Time taken: " << time/std::chrono::milliseconds(1) << "ms"
         << std::endl;
 
-    int Xavg[nSpecies];
+    double Xavg[nSpecies];
 
     for (int i=0; i<nSpecies; i++) {
+        Xavg[i] = 0;
         for (int j=0; j<N; j++) {
             Xavg[i] += (Xs[j])[i];
         }
