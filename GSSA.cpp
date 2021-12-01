@@ -42,8 +42,11 @@ int* Gillespie(int* X,
         for (int i=0; i<nReacs; i++) {
             R[i] = K[i];
             for (int j=0; j<nSpecies; j++) 
-                if (M[i*nSpecies + j] < 0) 
-                    R[i] *= pow(X[j], -M[i*nSpecies + j]);
+                if (M[i*nSpecies + j] < 0) {
+                    if (X[j] >= -M[i*nSpecies + j]) {
+                        R[i] *= pow(X[j], -M[i*nSpecies + j]);
+                    } else R[i] *= 0;
+                }
             Rsum += R[i];
         }
 
