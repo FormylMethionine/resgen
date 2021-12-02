@@ -13,7 +13,7 @@ __global__
 void Gillespie(int* X, int nSpecies, double* K, int nReacs, int* M, double
         tstart, double tmax, int N, curandStateMtgp32* states) {
 
-    double t = tstart;
+    double t;
     double* R = (double*)malloc(nReacs*sizeof(double));
     double Rsum; // sum of reaction rates
     double partialRsum; // partial sum of reaction rates
@@ -22,58 +22,64 @@ void Gillespie(int* X, int nSpecies, double* K, int nReacs, int* M, double
     double tau; // increment of time
     bool exit; // flag to exit the loop
     
-    int id = blockIdx.x*blockDim.x + threadIdx.x;
+    int tid = blockIdx.x*blockDim.x + threadIdx.x;
+    int stride = blockDim.x * gridDim.x;
 
-    while (t < tmax) {
+    for (int id=tid; id<N; id += stride) {
+        
+        t = tstart;
 
-        Rsum = 0;
+        while (t < tmax) {
 
-        //Calculte reaction rates
-        for (int i=0; i<nReacs; i++) {
+            Rsum = 0;
 
-            R[i] = K[i];
+            //Calculte reaction rates
+            for (int i=0; i<nReacs; i++) {
 
-            for (int j=0; j<nSpecies; j++) {
+                R[i] = K[i];
 
-                if (M[i*nSpecies + j] < 0) {
+                for (int j=0; j<nSpecies; j++) {
 
-                    if (X[j*N + id] >= -M[i*nSpecies + j]) {
-                        // Reaction rate can only be non zero if there is
-                        // enough reactants to permit reactions
-                        // this a safeguard to prevent X from going negative
-                        R[i] *= pow((double)X[j*N + id], 
-                                    (double)(-M[i*nSpecies + j]));
-                    } else R[i] *= 0;
+                    if (M[i*nSpecies + j] < 0) {
+
+                        if (X[j*N + id] >= -M[i*nSpecies + j]) {
+                            // Reaction rate can only be non zero if there is
+                            // enough reactants to permit reactions
+                            // this a safeguard to prevent X from going negative
+                            R[i] *= pow((double)X[j*N + id], 
+                                        (double)(-M[i*nSpecies + j]));
+                        } else R[i] *= 0;
+                    }
                 }
+
+                Rsum += R[i];
             }
 
-            Rsum += R[i];
-        }
-        //printf("\n");
+            exit = true;
+            for (int i=0; i<nReacs; i++) if (R[i] != 0) exit=false; 
+            if (exit) break;
 
-        exit = true;
-        for (int i=0; i<nReacs; i++) if (R[i] != 0) exit=false; 
-        if (exit) break;
+            // Draw two random numbers
+            r1 = curand_uniform(&states[blockIdx.x]);
+            r2 = curand_uniform(&states[blockIdx.x]);
+            
+            // Select reaction to fire
+            choice = 0;
+            partialRsum = R[choice];
+            while (partialRsum < r2*Rsum) {
+                choice++;
+                partialRsum += R[choice];
+            }
+            
+            // Pass time
+            tau = -log(r1)/Rsum;
+            t += tau;
+            
+            // update X
+            for (int i=0; i<nSpecies; i++) 
+            X[i*N + id] += M[choice*nSpecies + i];
 
-        // Draw two random numbers
-        r1 = curand_uniform(&states[blockIdx.x]);
-        r2 = curand_uniform(&states[blockIdx.x]);
-        
-        // Select reaction to fire
-        choice = 0;
-        partialRsum = R[choice];
-        while (partialRsum < r2*Rsum) {
-            choice++;
-            partialRsum += R[choice];
         }
-        
-        // Pass time
-        tau = -log(r1)/Rsum;
-        t += tau;
-        
-        // update X
-        for (int i=0; i<nSpecies; i++) 
-        X[i*N + id] += M[choice*nSpecies + i];
 
     }
 
@@ -81,7 +87,7 @@ void Gillespie(int* X, int nSpecies, double* K, int nReacs, int* M, double
 
 int main() {
 
-    int N = NB*TPB;
+    int N = 100000;
 
     int* X;
     double* K;
@@ -117,7 +123,7 @@ int main() {
     M[11] = 1;
 
     curandStateMtgp32* states;
-    cudaMalloc(&states, N*sizeof(curandStateMtgp32));
+    cudaMalloc(&states, NB*sizeof(curandStateMtgp32));
 
     mtgp32_kernel_params* kernelParams;
     cudaMalloc(&kernelParams, sizeof(kernelParams));
@@ -125,7 +131,7 @@ int main() {
     curandMakeMTGP32KernelState(states, mtgp32dc_params_fast_11213,
             kernelParams, NB, time(NULL));
 
-    Gillespie <<<NB, TPB>>> (X, 3, K, 4, M, 0.0, 6.0, N, states);
+    Gillespie <<<NB, TPB>>> (X, 3, K, 4, M, 0.0, 1.0, N, states);
     cudaDeviceSynchronize();
 
     float X_mean[3] = {0, 0, 0};
