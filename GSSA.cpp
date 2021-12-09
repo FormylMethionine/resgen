@@ -90,8 +90,6 @@ int main(int argc, char** argv) {
     }
 
     // Reading network file
-    
-    std::cout << argv[1] << std::endl;
 
     std::ifstream network(argv[1]);
 
@@ -168,6 +166,11 @@ int main(int argc, char** argv) {
         for (int j=0; j<nSpecies; j++) (Xs[i])[j] = Xini[j];
     }
 
+    std::cout << "file: " << argv[1] << " "
+        << "N: " << N << " "
+        << "Nspecies: " << nSpecies << " "
+        << "Nreacs: " << nReacs << " "
+        << std::endl;
     auto start = std::chrono::high_resolution_clock::now();
     for (int i=0; i<N; i++)
         Gillespie(Xs[i], nSpecies, K, nReacs, M, 0.0, 1.0);
@@ -189,14 +192,16 @@ int main(int argc, char** argv) {
         }
         Xavg[i] /= N;
     }
-    for (int i=0; i<N; i++) delete Xs[i];
 
     std::ofstream results;
     results.open("results.txt");
 
     if (results.is_open()) {
-        for (int i=0; i<nSpecies; i++) {
-            results << Xavg[i] << ",";
+        for (int i=0; i<N; i++) {
+            for (int j=0; j<nSpecies; j++) {
+                results << (Xs[i])[j] << ",";
+            }
+            results << "\n";
         }
     } else {
         std::cout << "Unable to open result file" << std::endl;
@@ -214,7 +219,8 @@ int main(int argc, char** argv) {
             << "," 
             << N 
             << "," 
-            << time/std::chrono::milliseconds(1);
+            << time/std::chrono::milliseconds(1)
+            << "\n";
     } else {
         std::cout << "Unable to open result file" << std::endl;
         return 1;
@@ -225,6 +231,7 @@ int main(int argc, char** argv) {
     delete Xini;
     delete K;
     delete M;
+    for (int i=0; i<N; i++) delete Xs[i];
 
     return 0;
 }
