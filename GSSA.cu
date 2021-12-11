@@ -7,12 +7,12 @@
 #include <cuda.h>
 #include <curand.h>
 #include <curand_kernel.h>
+#include <algorithm>
 #include <math.h>
 #include <stdio.h>
-#include <curand_mtgp32_host.h>
 
-#define NB 64
-#define TPB 256
+#define MAX_BLOCKS 1024
+#define TPB 1024
 
 __global__
 void Gillespie(int* X, 
@@ -23,7 +23,7 @@ void Gillespie(int* X,
         const double tstart,
         const double tmax,
         const int N,
-        curandStateMtgp32* states) {
+        unsigned long int seed) {
 
     double t;
     //double* R = (double*)malloc(nReacs*sizeof(double));
@@ -37,6 +37,9 @@ void Gillespie(int* X,
     
     int tid = blockIdx.x*blockDim.x + threadIdx.x;
     int stride = blockDim.x * gridDim.x;
+
+    curandState_t state;
+    curand_init(seed, tid, 0, &state);
 
     for (int id=tid; id<N; id += stride) {
 
@@ -72,11 +75,9 @@ void Gillespie(int* X,
             for (int i=0; i<nReacs; i++) if (R[i] != 0) exit=false; 
             if (exit) break;
 
-            __syncthreads();
-
             // Draw two random numbers
-            r1 = curand_uniform(&states[blockIdx.x]);
-            r2 = curand_uniform(&states[blockIdx.x]);
+            r1 = curand_uniform(&state);
+            r2 = curand_uniform(&state);
             
             // Select reaction to fire
             choice = 0;
@@ -91,20 +92,21 @@ void Gillespie(int* X,
             t += tau;
             
             // update X
-            for (int i=0; i<nSpecies; i++) 
-            X[i*N + id] += M[choice*nSpecies + i];
+            for (int i=0; i<nSpecies; i++) {
+                X[i*N + id] += M[choice*nSpecies + i];
+            }
 
         }
 
     }
 
-    delete R;
+    delete[] R;
 
 }
 
 int main(int argc, char** argv) {
 
-    if (argc != 3) {
+    if (argc != 5) {
         std::cout << "Argument!" << std::endl;
         return 1;
     }
@@ -117,7 +119,10 @@ int main(int argc, char** argv) {
 
     int N = std::stoi(argv[2]);
 
-    N = ((N + TPB - 1) / TPB) * TPB;
+    int NB = std::min((N + TPB - 1) / TPB, MAX_BLOCKS);
+
+    double tstart = std::stod(argv[3]);
+    double tend = std::stod(argv[4]);
 
     int nSpecies;
     int nReacs;
@@ -190,29 +195,19 @@ int main(int argc, char** argv) {
         for (int j=0; j<N; j++) X[i*N + j] = Xini[i];
     }
 
-    curandStateMtgp32* states;
-    cudaMallocManaged(&states, NB*sizeof(curandStateMtgp32));
-
-    mtgp32_kernel_params* kernelParams;
-    cudaMallocManaged(&kernelParams, sizeof(kernelParams));
-    curandMakeMTGP32Constants(mtgp32dc_params_fast_11213, kernelParams);
-    curandMakeMTGP32KernelState(states, mtgp32dc_params_fast_11213,
-            kernelParams, NB, time(NULL));
-
     std::cout << "file: " << argv[1] << " "
         << "N: " << N << " "
         << "Nspecies: " << nSpecies << " "
         << "Nreacs: " << nReacs << " "
+        << "NB: " << NB << " "
         << std::endl;
     auto start = std::chrono::high_resolution_clock::now();
-    Gillespie <<<NB, TPB>>> (X, 3, K, 4, M, 0.0, 1.0, N, states);
+    Gillespie <<<NB, TPB>>> (X, nSpecies, K, nReacs, M, tstart, tend, N, time(NULL));
     cudaDeviceSynchronize();
     auto end = std::chrono::high_resolution_clock::now();
 
     auto time = end - start;
 
-    //for (int i=0; i<3; i++) std::cout << X[i] << " ";
-    std::cout << std::endl;
     std::cout << "Time taken: " << time/std::chrono::milliseconds(1) << "ms"
         << std::endl;
 
@@ -265,7 +260,6 @@ int main(int argc, char** argv) {
     cudaFree(&X);
     cudaFree(&K);
     cudaFree(&M);
-    cudaFree(&states);
 
     return 0;
        
