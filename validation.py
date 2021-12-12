@@ -3,7 +3,7 @@ import numpy as np
 import pandas as pd
 import stochpy
 
-N = 1024;
+N = 256;
 
 model = stochpy.SSA()
 model.Model('validation_model.psc', dir='./')
@@ -20,7 +20,7 @@ df = pd.DataFrame(data={'S1': distrib[:, 0],
                         'method': 'stochpy'})
 
 os.system('g++ ./GSSA.cpp -O3 -o ./GSSA')
-os.system(f'./GSSA networks/test.txt {N}')
+os.system(f'./GSSA networks/test.txt {N} 0 1')
 
 for i, line in enumerate(open('./results.txt', 'r')):
     line = line[:-1].split(',')
@@ -32,8 +32,8 @@ df2 = pd.DataFrame(data={'S1': distrib[:, 0],
                          'S3': distrib[:, 2],
                          'method': 'C++'})
 
-os.system('nvcc ./GSSA.cu -o GSSA_cu')
-os.system(f'nvprof ./GSSA_cu networks/test.txt {N}')
+os.system('nvcc ./GSSA.cu -O3 -o GSSA_cu')
+os.system(f'nvprof ./GSSA_cu networks/test.txt {N} 0 1')
 
 for i, line in enumerate(open('./results.txt', 'r')):
     line = line[:-1].split(',')

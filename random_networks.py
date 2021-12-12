@@ -6,13 +6,13 @@ path = "./networks"
 if not os.path.exists(path):
     os.makedirs(path)
 
-Nspecies = np.array([10, 20, 100, 500, 1000])
+Nspecies = np.array([10, 20, 50, 100, 250, 500, 750, 1000])
 
 for i, Nsp in enumerate(Nspecies):
     print(i)
-    X = np.random.randint(0, 10000, size=Nsp)
+    X = np.random.randint(0, 1000, size=Nsp)
     Nreacs = int(.8*Nsp)
-    K = np.random.rand(Nreacs)*1
+    K = 10**(-1*(np.random.rand(Nreacs)*5))
     M = np.zeros((Nreacs, Nsp))
     # Generating stoechiometry matrix
     for i in range(Nreacs):
@@ -40,7 +40,6 @@ for i, Nsp in enumerate(Nspecies):
             f.write(f"{X[i]} ")
         f.write('\n')
         # writing reaction rates
-        print(Nreacs)
         f.write(f"{Nreacs} ")
         for i in range(Nreacs):
             f.write(f"{K[i]} ")
