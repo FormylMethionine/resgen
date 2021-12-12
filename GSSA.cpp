@@ -84,7 +84,7 @@ int* Gillespie(int* X,
 
 int main(int argc, char** argv) {
 
-    if (argc != 3) {
+    if (argc != 5) {
         std::cout << "Argument!" << std::endl;
         return 1;
     }
@@ -94,6 +94,8 @@ int main(int argc, char** argv) {
     std::ifstream network(argv[1]);
 
     int N = std::stoi(argv[2]);
+    double tstart = std::stod(argv[3]);
+    double tend = std::stod(argv[4]);
 
     int nSpecies;
     int nReacs;
@@ -122,7 +124,7 @@ int main(int argc, char** argv) {
 
             switch(line_nb) {
 
-                case 0 : 
+                case 0: 
                 {
                     nSpecies = std::stoi(words[0]);
                     Xini = new int[nSpecies];
@@ -173,13 +175,11 @@ int main(int argc, char** argv) {
         << std::endl;
     auto start = std::chrono::high_resolution_clock::now();
     for (int i=0; i<N; i++)
-        Gillespie(Xs[i], nSpecies, K, nReacs, M, 0.0, 1.0);
+        Gillespie(Xs[i], nSpecies, K, nReacs, M, tstart, tend);
     auto end = std::chrono::high_resolution_clock::now();
 
     auto time = end - start;
 
-    //for (int i=0; i<3; i++) std::cout << X[i] << " ";
-    std::cout << std::endl;
     std::cout << "Time taken: " << time/std::chrono::milliseconds(1) << "ms"
         << std::endl;
 

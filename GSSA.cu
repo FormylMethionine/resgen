@@ -47,6 +47,8 @@ void Gillespie(int* X,
 
         while (t < tmax) {
 
+            __syncthreads();
+
             Rsum = 0;
 
             //Calculte reaction rates
